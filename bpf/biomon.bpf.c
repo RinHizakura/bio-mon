@@ -21,7 +21,7 @@
 /* Note: the parameter of a tracepoint can be  by the
  * first arguments of DEFINE_EVENT(block_rq, block_io_start, ...) */
 SEC("tracepoint/block/block_io_start")
-int block_rq_insert(struct trace_event_raw_block_rq *args)
+int block_io_start(struct trace_event_raw_block_rq *args)
 {
     u64 ts = bpf_ktime_get_ns();
     dev_t dev = args->dev;
@@ -34,6 +34,22 @@ int block_rq_insert(struct trace_event_raw_block_rq *args)
     bpf_printk("[%-10lld] block_io_start: (%-3d,%-3d) %-8s %-10d", ts,
                dev_major, dev_minor, rwbs, sector);
 
+    return 0;
+}
+
+SEC("tracepoint/block/block_io_done")
+int block_io_done(struct trace_event_raw_block_rq *args)
+{
+    u64 ts = bpf_ktime_get_ns();
+    dev_t dev = args->dev;
+    char *rwbs = args->rwbs;
+    sector_t sector = args->sector;
+
+    u32 dev_major = MAJOR(dev);
+    u32 dev_minor = MINOR(dev);
+
+    bpf_printk("[%-10lld] block_io_done: (%-3d,%-3d) %-8s %-10d", ts, dev_major,
+               dev_minor, rwbs, sector);
     return 0;
 }
 
