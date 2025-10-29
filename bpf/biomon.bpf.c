@@ -9,14 +9,13 @@
 /* clang-format on */
 
 #include "common.h"
+#include "msg.h"
 
 #define MINORBITS 20
 #define MINORMASK ((1U << MINORBITS) - 1)
 
 #define MAJOR(dev) ((unsigned int) ((dev) >> MINORBITS))
 #define MINOR(dev) ((unsigned int) ((dev) &MINORMASK))
-
-#define RWBS_LEN 8
 
 typedef struct {
     dev_t dev;
@@ -35,6 +34,13 @@ struct {
     __type(key, hash_key_t);
     __type(value, req_t);
 } req_info SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 10240);
+} msg_ringbuf SEC(".maps");
+
+u64 MSG_ID = 0;
 
 static int get_rwflag_tp(char *rwbs)
 {
@@ -82,6 +88,7 @@ int block_io_start(struct trace_event_raw_block_rq *args)
 SEC("tracepoint/block/block_io_done")
 int block_io_done(struct trace_event_raw_block_rq *args)
 {
+    pid_t pid = (bpf_get_current_pid_tgid() >> 32);
     u64 ts = bpf_ktime_get_ns();
     u32 rwflag;
     dev_t dev = args->dev;
@@ -89,8 +96,8 @@ int block_io_done(struct trace_event_raw_block_rq *args)
     sector_t sector = args->sector;
     hash_key_t key;
     req_t *req;
+    msg_ent_t *ent;
 
-    bpf_probe_read(&rwbs, RWBS_LEN, args->rwbs);
     rwflag = get_rwflag_tp(rwbs);
 
     key = (hash_key_t){
@@ -108,6 +115,18 @@ int block_io_done(struct trace_event_raw_block_rq *args)
 
     bpf_printk("(%-3d,%-3d) %-8s %-10d time=%-10d(ms)", MAJOR(dev), MINOR(dev),
                rwbs, sector, ts / 1000);
+
+    ent = bpf_ringbuf_reserve(&msg_ringbuf, sizeof(msg_ent_t), 0);
+    if (ent) {
+        ent->id = MSG_ID++;
+        ent->ts = ts;
+        ent->pid = pid;
+        ent->sector = sector;
+        ent->dev = dev;
+        ent->rwflag = rwflag;
+        bpf_get_current_comm(&ent->comm, sizeof(ent->comm));
+        bpf_ringbuf_submit(ent, 0);
+    }
 
     return 0;
 }
