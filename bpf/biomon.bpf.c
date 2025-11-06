@@ -98,6 +98,7 @@ int block_io_done(struct trace_event_raw_block_rq *args)
     req_t *req;
     msg_ent_t *ent;
 
+    bpf_probe_read(&rwbs, RWBS_LEN, args->rwbs);
     rwflag = get_rwflag_tp(rwbs);
 
     key = (hash_key_t){
