@@ -1,7 +1,9 @@
 use crate::bump_memlock_rlimit::*;
+use std::collections::HashMap;
+use std::fs::read_to_string;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -18,6 +20,21 @@ use biomon::*;
 
 lazy_static! {
     static ref running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+    static ref diskmap: Mutex<HashMap<u32, String>> = Mutex::new(HashMap::new());
+}
+
+fn create_diskmap() -> Result<()> {
+    let mut m = diskmap.lock().unwrap();
+    let f = read_to_string("/proc/diskstats")?;
+    for line in f.lines() {
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        let major: u32 = tokens[0].parse().unwrap();
+        let minor: u32 = tokens[1].parse().unwrap();
+        let dev = major << 20 | minor;
+        m.insert(dev, tokens[2].to_owned());
+    }
+
+    Ok(())
 }
 
 const TASK_COMM_LEN: usize = 16;
@@ -98,6 +115,8 @@ fn main() -> Result<()> {
     if cfg!(bump_memlock_rlimit_manually) {
         bump_memlock_rlimit()?;
     }
+
+    create_diskmap()?;
 
     let mut open_object = MaybeUninit::uninit();
     let builder = BiomonSkelBuilder::default();
