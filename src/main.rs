@@ -38,7 +38,6 @@ fn format_cmd(buf: &[u8; TASK_COMM_LEN]) -> String {
     let mut idx = 0;
 
     let mut s = String::new();
-    s.push('"');
     while idx < len {
         let c = buf[idx];
         if c == 0 {
@@ -52,7 +51,7 @@ fn format_cmd(buf: &[u8; TASK_COMM_LEN]) -> String {
 
     /* If we can't find the ended zero in the buffer, this is an incomplete string. */
     let extra = if idx >= len { "..." } else { "" };
-    s.push_str(&format!("\"{}", extra));
+    s.push_str(&format!("{}", extra));
     s
 }
 
