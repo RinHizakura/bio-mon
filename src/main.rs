@@ -89,11 +89,12 @@ fn msg_handler(bytes: &[u8]) -> i32 {
     let dev = ent.dev;
     let rwflag = ent.rwflag;
     let comm = &ent.comm;
+    let m = diskmap.lock().unwrap();
 
     print!("{:<14}", ts);
     print!(" {:<14}", &format_cmd(comm));
     print!(" {:<6}", pid);
-    print!(" {:<7}", dev);
+    print!(" {:<7}", m.get(&dev).unwrap_or(&"Unknown".to_string()));
     print!(" {:<2}", rwflag);
     print!(" {:<10}", sector);
     print!(" {:<7}", 0);
