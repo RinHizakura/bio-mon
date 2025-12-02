@@ -114,7 +114,8 @@ int block_io_done(struct trace_event_raw_block_rq *args)
         ent = bpf_ringbuf_reserve(&msg_ringbuf, sizeof(msg_ent_t), 0);
         if (ent) {
             ent->id = MSG_ID++;
-            ent->ts = ts - val->ts;
+            ent->delta = ts - val->ts;
+            ent->ts_ms = ts / 1000;
             ent->pid = val->pid;
             ent->sector = sector;
             ent->dev = dev;

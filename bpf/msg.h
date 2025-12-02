@@ -6,7 +6,8 @@
 #define TASK_COMM_LEN 16
 typedef struct {
     u64 id;
-    u64 ts;
+    u64 ts_ms;
+    u64 delta;
     u64 pid;
     u64 sector;
     u32 dev;

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -22,6 +22,7 @@ lazy_static! {
     static ref running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
     static ref diskmap: Mutex<HashMap<u32, String>> = Mutex::new(HashMap::new());
 }
+static START_TS: OnceLock<u64> = OnceLock::new();
 
 fn create_diskmap() -> Result<()> {
     let mut m = diskmap.lock().unwrap();
@@ -41,7 +42,8 @@ const TASK_COMM_LEN: usize = 16;
 #[repr(C)]
 struct MsgEnt {
     id: u64,
-    ts: u64,
+    ts_ms: u64,
+    delta: u64,
     pid: u64,
     sector: u64,
     dev: u32,
@@ -83,15 +85,16 @@ fn msg_handler(bytes: &[u8]) -> i32 {
     let ent = &bytes[0..ent_size];
 
     let ent: &MsgEnt = cast(ent);
-    let ts = ent.ts;
+    let ts = ent.ts_ms;
     let pid = ent.pid;
     let sector = ent.sector;
     let dev = ent.dev;
     let rwflag = ent.rwflag;
     let comm = &ent.comm;
     let m = diskmap.lock().unwrap();
+    let start_ts = START_TS.get_or_init(|| ts);
 
-    print!("{:<14}", ts);
+    print!("{:<14.6}", (ts - start_ts) as f32 / 1000000.0);
     print!(" {:<14}", &format_cmd(comm));
     print!(" {:<6}", pid);
     print!(" {:<7}", m.get(&dev).unwrap_or(&"<unknown>".to_string()));
