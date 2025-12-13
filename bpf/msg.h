@@ -10,6 +10,8 @@ typedef struct {
     u64 delta;
     u64 pid;
     u64 sector;
+    u64 qlen;
+    u64 io_len;
     u32 dev;
     u32 rwflag;
     char comm[TASK_COMM_LEN];

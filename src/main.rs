@@ -46,6 +46,8 @@ struct MsgEnt {
     delta: u64,
     pid: u64,
     sector: u64,
+    qlen: u64,
+    io_len: u64,
     dev: u32,
     rwflag: u32,
     comm: [u8; TASK_COMM_LEN],
@@ -88,20 +90,26 @@ fn msg_handler(bytes: &[u8]) -> i32 {
     let ts = ent.ts_ms;
     let pid = ent.pid;
     let sector = ent.sector;
+    let qlen = ent.qlen;
+    let io_len = ent.io_len;
     let dev = ent.dev;
     let rwflag = ent.rwflag;
     let comm = &ent.comm;
     let m = diskmap.lock().unwrap();
     let start_ts = START_TS.get_or_init(|| ts);
 
-    print!("{:<14.6}", (ts - start_ts) as f32 / 1000000.0);
-    print!(" {:<14}", &format_cmd(comm));
-    print!(" {:<6}", pid);
-    print!(" {:<7}", m.get(&dev).unwrap_or(&"<unknown>".to_string()));
-    print!(" {:<2}", if rwflag == 1 { "W" } else { "R" });
-    print!(" {:<10}", sector);
-    print!(" {:<7}", 0);
-    println!(" {:<7}", 0);
+    println!(
+        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7}",
+        (ts - start_ts) as f32 / 1000000.0,
+        &format_cmd(comm),
+        pid,
+        m.get(&dev).unwrap_or(&"<unknown>".to_string()),
+        if rwflag == 1 { "W" } else { "R" },
+        sector,
+        qlen,
+        io_len,
+        0
+    );
 
     0
 }
@@ -143,8 +151,8 @@ fn main() -> Result<()> {
     })?;
 
     println!(
-        "{:<14} {:<14} {:<6} {:<7} {:<2} {:<10} {:<7} {:<7}",
-        "TIME(s)", "COMM", "PID", "DISK", "T", "SECTOR", "BYTES", "LAT(ms)"
+        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7}",
+        "TIME(s)", "COMM", "PID", "DISK", "T", "SECTOR", "BYTES", "IOBYTES", "LAT(ms)"
     );
 
     while running.load(Ordering::SeqCst) {
