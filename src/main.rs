@@ -95,11 +95,12 @@ fn msg_handler(bytes: &[u8]) -> i32 {
     let dev = ent.dev;
     let rwflag = ent.rwflag;
     let comm = &ent.comm;
+    let delta = ent.delta;
     let m = diskmap.lock().unwrap();
     let start_ts = START_TS.get_or_init(|| ts);
 
     println!(
-        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7}",
+        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7.2}",
         (ts - start_ts) as f32 / 1000000.0,
         &format_cmd(comm),
         pid,
@@ -108,7 +109,7 @@ fn msg_handler(bytes: &[u8]) -> i32 {
         sector,
         qlen,
         io_len,
-        0
+        delta as f32 / 1000000.0,
     );
 
     0
