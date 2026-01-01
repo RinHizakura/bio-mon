@@ -53,6 +53,13 @@ struct {
 } io_info SEC(".maps");
 
 struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 10240);
+    __type(key, dev_t);
+    __type(value, u64);
+} last_sector_info SEC(".maps");
+
+struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 10240);
 } msg_ringbuf SEC(".maps");
@@ -140,7 +147,8 @@ int block_io_start(struct trace_event_raw_block_rq *args)
 SEC("tracepoint/block/block_io_done")
 int block_io_done(struct trace_event_raw_block_rq *args)
 {
-    u64 ts;
+    u64 ts, next_last_sector;
+    u64 *last_sector;
     u32 rwflag;
     dev_t dev = args->dev;
     char rwbs[RWBS_LEN];
@@ -171,17 +179,28 @@ int block_io_done(struct trace_event_raw_block_rq *args)
     }
     ts = bpf_ktime_get_ns();
     ent->id = MSG_ID++;
+    ent->qdelta = 0;
     ent->delta = ts - start_req->ts;
     ent->ts_ms = ts / 1000;
     ent->qlen = start_req->len;
 
+    ent->pattern = '?';
+
     io = bpf_map_lookup_elem(&io_info, &key);
     if (io) {
+        ent->qdelta = start_req->ts - io->ts;
         ent->pid = io->pid;
         ent->sector = sector;
         ent->io_len = io->len;
         ent->dev = dev;
         ent->rwflag = rwflag;
+
+        last_sector = bpf_map_lookup_elem(&last_sector_info, &dev);
+        if (last_sector)
+            ent->pattern = *last_sector == sector ? 'S' : 'R';
+        next_last_sector = sector + start_req->len / 512;
+        bpf_map_update_elem(&last_sector_info, &dev, &next_last_sector,
+                            BPF_ANY);
         memcpy(ent->comm, io->comm, sizeof(io->comm));
     }
 

@@ -8,6 +8,7 @@ typedef struct {
     u64 id;
     u64 ts_ms;
     u64 delta;
+    u64 qdelta;
     u64 pid;
     u64 sector;
     u64 qlen;
@@ -15,6 +16,7 @@ typedef struct {
     u32 dev;
     u32 rwflag;
     char comm[TASK_COMM_LEN];
+    char pattern;
 } msg_ent_t;
 
 #endif

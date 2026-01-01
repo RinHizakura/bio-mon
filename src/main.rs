@@ -44,6 +44,7 @@ struct MsgEnt {
     id: u64,
     ts_ms: u64,
     delta: u64,
+    qdelta: u64,
     pid: u64,
     sector: u64,
     qlen: u64,
@@ -51,6 +52,7 @@ struct MsgEnt {
     dev: u32,
     rwflag: u32,
     comm: [u8; TASK_COMM_LEN],
+    pattern: u8,
 }
 unsafe impl Plain for MsgEnt {}
 
@@ -94,13 +96,15 @@ fn msg_handler(bytes: &[u8]) -> i32 {
     let io_len = ent.io_len;
     let dev = ent.dev;
     let rwflag = ent.rwflag;
+    let pattern = ent.pattern;
     let comm = &ent.comm;
     let delta = ent.delta;
+    let qdelta = ent.qdelta;
     let m = diskmap.lock().unwrap();
     let start_ts = START_TS.get_or_init(|| ts);
 
     println!(
-        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7.2}",
+        "{:<12} {:<16} {:<6} {:<9} {:<2} {:<10} {:<8} {:<8} {:<2} {:<7.2} {:<7.2}",
         (ts - start_ts) as f32 / 1000000.0,
         &format_cmd(comm),
         pid,
@@ -109,6 +113,8 @@ fn msg_handler(bytes: &[u8]) -> i32 {
         sector,
         qlen,
         io_len,
+        pattern as char,
+        qdelta as f32 / 1000000.0,
         delta as f32 / 1000000.0,
     );
 
@@ -152,8 +158,18 @@ fn main() -> Result<()> {
     })?;
 
     println!(
-        "{:<12} {:<16} {:<6} {:<7} {:<2} {:<10} {:<8} {:<8} {:<7}",
-        "TIME(s)", "COMM", "PID", "DISK", "T", "SECTOR", "BYTES", "IOBYTES", "LAT(ms)"
+        "{:<12} {:<16} {:<6} {:<9} {:<2} {:<10} {:<8} {:<8} {:<2} {:<7} {:<7}",
+        "TIME(s)",
+        "COMM",
+        "PID",
+        "DISK",
+        "T",
+        "SECTOR",
+        "BYTES",
+        "IOBYTES",
+        "P",
+        "QUE(ms)",
+        "LAT(ms)"
     );
 
     while running.load(Ordering::SeqCst) {
