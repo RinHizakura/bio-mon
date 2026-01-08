@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::Result;
+use clap::Parser;
 use lazy_static::lazy_static;
 use libbpf_rs::RingBufferBuilder;
 use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
@@ -18,24 +19,40 @@ mod bump_memlock_rlimit;
 mod biomon;
 use biomon::*;
 
+#[derive(Parser)]
+struct Cli {
+    #[arg(short, long, help = "Name of target block device to trace, e.g. sda")]
+    device: Option<String>,
+}
+
 lazy_static! {
     static ref running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
     static ref diskmap: Mutex<HashMap<u32, String>> = Mutex::new(HashMap::new());
 }
 static START_TS: OnceLock<u64> = OnceLock::new();
 
-fn create_diskmap() -> Result<()> {
+fn create_diskinfo(target_dev: Option<String>) -> Result<Option<u32>> {
     let mut m = diskmap.lock().unwrap();
+    let mut filter_dev: Option<u32> = None;
+
     let f = read_to_string("/proc/diskstats")?;
     for line in f.lines() {
         let tokens: Vec<&str> = line.split_whitespace().collect();
         let major: u32 = tokens[0].parse().unwrap();
         let minor: u32 = tokens[1].parse().unwrap();
+        let device_name = tokens[2];
         let dev = major << 20 | minor;
-        m.insert(dev, tokens[2].to_owned());
+
+        if target_dev.is_some() {
+            if device_name == target_dev.as_ref().unwrap() {
+                filter_dev = Some(dev);
+            }
+        }
+
+        m.insert(dev, device_name.to_owned());
     }
 
-    Ok(())
+    Ok(filter_dev)
 }
 
 const TASK_COMM_LEN: usize = 16;
@@ -130,17 +147,29 @@ fn rb_callback(bytes: &[u8]) -> i32 {
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let target_dev = cli.device;
+
     /* We may have to bump RLIMIT_MEMLOCK for libbpf explicitly */
     if cfg!(bump_memlock_rlimit_manually) {
         bump_memlock_rlimit()?;
     }
 
-    create_diskmap()?;
+    let filter_dev = create_diskinfo(target_dev)?;
 
     let mut open_object = MaybeUninit::uninit();
     let builder = BiomonSkelBuilder::default();
     /* Open BPF application */
-    let open_skel = builder.open(&mut open_object)?;
+    let mut open_skel = builder.open(&mut open_object)?;
+
+    if let Some(dev) = filter_dev {
+        let rodata = open_skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .expect("`rodata` is not memory mapped");
+        rodata.filter_dev = dev;
+    }
 
     /* Load & verify BPF programs */
     let mut skel = open_skel.load()?;

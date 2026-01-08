@@ -20,6 +20,8 @@
 #define REQ_OP_BITS 8
 #define REQ_OP_MASK ((1 << REQ_OP_BITS) - 1)
 
+const volatile dev_t filter_dev;
+
 typedef struct {
     dev_t dev;
     u32 rwflag;
