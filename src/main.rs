@@ -1,4 +1,3 @@
-use crate::bump_memlock_rlimit::*;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::mem::MaybeUninit;
@@ -12,8 +11,6 @@ use lazy_static::lazy_static;
 use libbpf_rs::RingBufferBuilder;
 use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
 use plain::Plain;
-
-mod bump_memlock_rlimit;
 
 #[path = "../bpf/.output/biomon.skel.rs"]
 mod biomon;
@@ -149,11 +146,6 @@ fn rb_callback(bytes: &[u8]) -> i32 {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let target_dev = cli.device;
-
-    /* We may have to bump RLIMIT_MEMLOCK for libbpf explicitly */
-    if cfg!(bump_memlock_rlimit_manually) {
-        bump_memlock_rlimit()?;
-    }
 
     let filter_dev = create_diskinfo(target_dev)?;
 
